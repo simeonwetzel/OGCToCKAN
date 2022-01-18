@@ -6,7 +6,9 @@ import requests
 import text_unidecode
 import yaml
 
-from main import rekis_create_tempfile_from_ftp_file
+from ftp_tools import FtpRekis
+
+# from main import rekis_create_tempfile_from_ftp_file
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -26,7 +28,11 @@ class CkanInstance:
         self.api_package_patch = self.api_action_url + 'package_patch'
         self.api_resource_create = self.api_action_url + 'resource_create'
         self.api_resource_patch = self.api_action_url + 'resource_patch'
+        self.api_resource_delete = self.api_action_url + 'resource_delete'
+        self.api_package_show = self.api_action_url + 'package_show'
         self.header = {'Authorization': config['ckan']['apikey']}
+        self.ftp = FtpRekis()
+        self.ncdf_ckan_dataset_assignments = config['ftp_nc_ckan_assignments']
 
     @staticmethod
     def create_ckan_compliant_url_from_name(name):
@@ -62,6 +68,21 @@ class CkanInstance:
             packages = contents['result']
 
         return packages
+
+    def get_metadata_of_ckan_dataset(self, dataset):
+        with urllib.request.urlopen(self.api_package_show + '?id={}'.format(dataset)) as response:
+            contents = json.loads(response.read().decode('utf8'))
+            metadatsets = contents['result']
+
+        return metadatsets
+
+    def delete_dataset_resource(self, resource_id):
+        data = {'id': resource_id}
+
+        requests.post(url=self.api_resource_delete,
+                      data=data,
+                      headers=self.header)
+
 
     def check_if_ckan_dataset_resource_exists(self, dataset_name, resource_cache_url, resource_create_date):
         """This function checks for given ckan dataset if there are already resources
@@ -118,7 +139,8 @@ class CkanInstance:
 
         # Create tempory file from ftp resource:
         # Todo: create rekis class with function
-        temporary_ftp_file = rekis_create_tempfile_from_ftp_file(directory=resource_path, filename=dataset_name)
+        temporary_ftp_file = self.ftp.rekis_create_tempfile_from_ftp_file(directory=resource_path,
+                                                                          filename=dataset_name)
 
         package_data = {'package_id': dataset_name_url,
                         'cache_url': resource_path,
@@ -142,6 +164,66 @@ class CkanInstance:
                           data=package_data,
                           headers=self.header,
                           files=[('upload', temporary_ftp_file)])
+
+    def upload_ncdf_from_rekisftp_to_ckan(self, dataset_name, resource_path, file_create_date):
+        dataset_name_url = self.create_ckan_compliant_url_from_name(dataset_name)
+        file_name = resource_path.split('/')[-1]
+        package_data = {'package_id': dataset_name_url,
+                        'name': file_name,
+                        'url': resource_path,
+                        'cache_url': resource_path,
+                        'created': file_create_date
+                        }
+        dst_resource_exists, existing_resources = self.check_if_ckan_dataset_resource_exists(dataset_name,
+                                                                                             resource_path,
+                                                                                             file_create_date)
+
+        if dst_resource_exists:
+            for item in existing_resources:
+                log.info('Updating exisiting resource with name {}'.format(item['name']))
+                package_data['id'] = item['id']
+                requests.post(url=self.api_resource_patch,
+                              data=package_data,
+                              headers=self.header)
+        else:
+            log.info('Create new resource with name {}'.format(dataset_name_url))
+            requests.post(url=self.api_resource_create,
+                          data=package_data,
+                          headers=self.header)
+        return
+
+    def update_ncdf_resources(self, ncdf_files_dict):
+        log.info("Updating NCDF climate files...")
+        packages = self.get_packages_of_ckan_instance()
+
+        """ Delete resources that are not on ftp"""
+        for dataset in packages:
+            dataset_metadata = self.get_metadata_of_ckan_dataset(dataset)
+            resources = dataset_metadata['resources']
+            for res in resources:
+                if '.nc' in res['name'] and res['cache_url'] not in ncdf_files_dict:
+                    log.info('Resource {} not found on FTP-Server. This Resources will be deleted'.format(res['name']))
+                    resource_id = res['id']
+                    self.delete_dataset_resource(resource_id)
+                pass
+        for key in ncdf_files_dict:
+            """ 
+            Check for each NCDF file if...
+                - path is in config-entry for ncdfs-ckan-assignments
+                - and if path is in config, select corresponding ckan package (if exists) and upload resources
+            """
+            for path_snippet in self.ncdf_ckan_dataset_assignments:
+                # Check if path snippet of config is contained in path and if ckan-dataset exists
+                if path_snippet in key \
+                        and self.ncdf_ckan_dataset_assignments[path_snippet] in packages:
+                    log.info('Updating resource for following NCDF-file: {}'.format(key))
+                    log.info('Corresponding CKAN-dataset: {}'.format(self.ncdf_ckan_dataset_assignments[path_snippet]))
+                    ckan_dataset = self.ncdf_ckan_dataset_assignments[path_snippet]
+                    path = key
+                    create_date = ncdf_files_dict[key]['create_date']
+                    self.upload_ncdf_from_rekisftp_to_ckan(ckan_dataset, path, create_date)
+                else:
+                    pass
 
     def push_dataset_to_ckan(self, dataset_dict):
         log.debug("Uploading following data: \n {}".format(dataset_dict))
