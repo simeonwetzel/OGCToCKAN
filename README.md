@@ -1,5 +1,9 @@
 # OGCToCKAN Harvester
 Scalable Harvester to transfer geospatial (meta-)datasets from OWS provided e.g. by Geoserver to CKAN using OWSlib and CKAN-API. This application was developed as a result of special requirements in the research project [KlimaKonform](https://klimakonform.uw.tu-dresden.de/). 
+
+## Requires:
+:warning: This requires a file called "config.yml" contains all connection definitions. During the development stage, this is not provided. A sample configuration will be provided at the end of the project development.
+
 ## Features:
 - Implements [OWSlib](https://geopython.github.io/OWSLib/)
 - Puts together metadatasets from multiple sources (mainly OWS) and creates a CKAN-dataset compliant to GeoDCAT-AP schema
