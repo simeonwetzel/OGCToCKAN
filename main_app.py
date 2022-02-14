@@ -20,6 +20,7 @@ config = yaml.safe_load(open('config.yml'))
 Main App calling methods of different classes
 """
 
+
 # Collecting data from ows source and push it to ckan
 wcs_datasets = ows.create_dataset_dicts_from_wfs_or_wcs(service_type='wcs')
 
@@ -33,27 +34,28 @@ log.info("Uploading wfs/wms resources to CKAN")
 for dataset in wfs_datasets:
     ckan.push_dataset_to_ckan(dataset)
 
+
 # Create dictionaries that list all rekis files and their corresponding directories on the ftp-server
 # Start collecting data from single state-folders (to look into necessary folders)
-"""
 rekis_ftp_file_dict_sn = ftp.create_ftp_file_dict(config['ftp']['data_paths']['SN'])
 rekis_ftp_file_dict_th = ftp.create_ftp_file_dict(config['ftp']['data_paths']['TN'])
 rekis_ftp_file_dict_st = ftp.create_ftp_file_dict(config['ftp']['data_paths']['ST'])
-"""
+
+# Merge multiple dicts into one
+#
+rekis_ftp_file_dict_all = {**rekis_ftp_file_dict_sn, **rekis_ftp_file_dict_th, **rekis_ftp_file_dict_st}
+ascii_files_dict = ftp.create_filtered_subdict_with_ascii_ftp_files(rekis_ftp_file_dict_all)
+ckan.update_ascii_resources(ascii_files_dict=ascii_files_dict)
+#
 
 # Collect resources from rekis-ftp and update dataset-resources in ckan
 rekis_climate_data_ftp_dict = ftp.create_ftp_file_dict(config['ftp']['data_paths']['klimadaten'])
 ncdf_files_dict = ftp.create_filtered_subdict_with_ncdf_ftp_files(rekis_climate_data_ftp_dict)
 ckan.update_ncdf_resources(ncdf_files_dict=ncdf_files_dict)
 
-# Merge multiple dicts into one
-#
-# rekis_ftp_file_dict_all = {**rekis_ftp_file_dict_sn, **rekis_ftp_file_dict_th, **rekis_ftp_file_dict_st}
 
 
-
-#
-
+# <editor-fold desc="Can be removed">
 # TODO: Move these two functions to ftp or ckan class
 def create_dict_with_ftp_files_with_matching_ckan_packages(ftp_file_dict):
     """Checks for each key in ftp_file_dict whether there is a matching dataset in ckan"""
@@ -81,3 +83,4 @@ def upload_ftp_resources(ftp_file_dict):
         ckan.upload_ftp_file_resource_to_ckan_dataset(name, path, create_date)
 
 # upload_ftp_resources(rekis_ftp_file_dict_all)
+# </editor-fold>

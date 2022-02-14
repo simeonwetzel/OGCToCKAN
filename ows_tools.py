@@ -141,6 +141,9 @@ class OGCHelperClass:
             tags = None
             local_resource_paths = None
             if meta_dict:
+                if meta_dict['should_be_uploaded'] is None:
+                    log.info('Skipping dataset because of configuration in metadata sheet')
+                    continue # Leaving the for loop for this dataset because parameter set in metadata excel
                 if meta_dict['name'] is not None:
                     title = meta_dict['name']
                 if meta_dict['alternate_ckan_org'] is not None:

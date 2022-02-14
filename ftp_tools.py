@@ -21,15 +21,17 @@ class FtpRekis:
         self.user = config['ftp']['user']
         self.passwd = config['ftp']['passwd']
 
+
     def create_ftp_file_dict(self, base_directory):
         """This function walks through ftp dir-tree starting with given base_directory
          and then creates dictionary in following format:
          {filename: {path: file/pth/..., create_date: ISO_date}}"""
 
-        log.info("Start collecting directories for ftp-files")
+        log.info("Start collecting directories for ftp-files // starting from following folder: {}".format(base_directory))
         file_dict = {}
         with ftplib.FTP(self.ip, self.user, self.passwd) as connection:
             connection.login(self.user, self.passwd)
+            connection.encoding = "iso-8859-15"
             ftpwalk = FTPWalk(connection)
 
             ftp_dir_tree = []
@@ -66,23 +68,20 @@ class FtpRekis:
                 path_split_and_modified.insert(0, 'https://rekisviewer.hydro.tu-dresden.de/geoserver')
                 new_path = "/".join(path_split_and_modified)
                 ncdf_files[new_path] = dict[key]
-            """
-            filename = dict[key]['file_name']
-            filename_split = filename.split('.', 1)
-            if len(filename_split) > 1:  # avoid Errors because of hidden files without extension
-                # TODO:
-                #  FTP paths are changed to
-                #  https://rekisviewer.hydro.tu-dresden.de/geoserver/klima/taegliche_daten/SA/Niederschlag.nc
+        return ncdf_files
+
+    @staticmethod
+    def create_filtered_subdict_with_ascii_ftp_files(dict):
+        """Checks for each key in ftp_file_dict whether there is a matching dataset in ckan"""
+        ascii_files = {}
+        for key in dict:
+            if '.asc' in key:
                 #  maybe possible to do this more generic
                 path_split_and_modified = key.split('/')[3:]
-                path_split_and_modified.append(key)
-                path_split_and_modified.insert(0, 'https://rekisviewer.hydro.tu-dresden.de/geoserver')
+                path_split_and_modified.insert(0, 'https://rekisviewer.hydro.tu-dresden.de/viewer')
                 new_path = "/".join(path_split_and_modified)
-                extension = filename_split[1]
-                if extension == 'nc':
-                    ncdf_files[new_path] = dict[key]
-            """
-        return ncdf_files
+                ascii_files[new_path] = dict[key]
+        return ascii_files
 
     def create_tempfile_from_ftp_file(self, directory, filename):
         with ftplib.FTP(self.ip, self.user, self.passwd) as ftp:
