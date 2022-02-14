@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from os import path as ospath
 import logging
 
@@ -35,15 +37,21 @@ class FTPWalk:
                     ls_type, name = info[-2], info[-1]
                     if ls_type == b'<DIR>':
                         try:
-                            dirs.append(name.decode("utf-8"))
+                            #dirs.append(name.decode("utf-8"))
+                            dirs.append(name.decode("iso-8859-15"))
                         except UnicodeDecodeError as e:
-                            log.debug("Cant read ftp-directory because of German umlauts: {}".format(name))
+                            log.debug("Cant read ftp-directory because of German umlauts: {}".format(name.decode('iso-8859-15')))
                             pass
                     else:
                         try:
-                            name_str, date_str, time_str = name.decode('utf-8'), \
-                                                           info[0].decode('utf-8'), \
-                                                           info[1].decode('utf-8')
+                            name_str, date_str, time_str = name.decode('iso-8859-15'), \
+                                                           info[0].decode('iso-8859-15'), \
+                                                           info[1].decode('iso-8859-15')
+                            """
+                                                            name.decode('utf-8'), \
+                                                            info[0].decode('utf-8'), \
+                                                            info[1].decode('utf-8')
+                            """
                             create_date = dateutil.parser \
                                 .parse("{0}, {1}".format(date_str, time_str)) \
                                 .isoformat()
