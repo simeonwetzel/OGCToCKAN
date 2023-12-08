@@ -1,1 +1,25 @@
-config.yml
+geoserver:
+  wms:
+    version: 1.3.0
+  wfs:
+    version: 2.0.0
+  wcs:
+    version: 2.0.1
+
+gs_config:
+  service_url: <https://.../geoserver/>
+  workspace: <workspace-to-save-uploads>
+  store_name: <datastore-to-save-uploads>
+  path_to_zipped_shapefiles: <path-for-data-uploads>
+  gs_user: <user>
+  gs_pw: <pw>
+
+
+ckan:
+  apikey: <provide-your-api-key>
+  url: <provide-your-ckan-url>
+
+ftp:
+  ip: <ip-address>
+  user: <user>
+  passwd: <pw>
