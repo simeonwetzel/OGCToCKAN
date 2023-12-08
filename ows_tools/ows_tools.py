@@ -7,7 +7,7 @@ from owslib.wms import WebMapService
 from pandas import ExcelFile
 import yaml
 import logging
-from ckan_tools import CkanInstance
+from ckan_tools.ckan_tools import CkanInstance
 import geojson
 
 
@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 log.addHandler(logging.StreamHandler())
 
-config = yaml.safe_load(open('config.yml'))
+config = yaml.safe_load(open('../config/config.yml'))
 
 
 def create_metadata_dict_from_xls_file(xls_path):
@@ -37,12 +37,11 @@ def create_metadata_dict_from_xls_file(xls_path):
 
 def create_metadata_dict_for_dataset(dataset_name, external_metadata_dict):
     meta_dict = {}
-    external_metadata_resource = create_metadata_dict_from_xls_file(config['external_metadata_resources']['excel'])
     if dataset_name in external_metadata_dict['dataset_name'].values():
-        datasets = external_metadata_resource['dataset_name']
+        datasets = external_metadata_dict['dataset_name']
         idx_in_dict = list(datasets.keys())[list(datasets.values()).index(dataset_name)]
-        for key in external_metadata_resource.keys():
-            meta_dict[key] = external_metadata_resource[key][idx_in_dict]
+        for key in external_metadata_dict.keys():
+            meta_dict[key] = external_metadata_dict[key][idx_in_dict]
     else:
         log.info("No external Metadata found for dataset: {}".format(dataset_name))
     return meta_dict
@@ -84,7 +83,7 @@ class OGCHelperClass:
 
     def __init__(self):
         self.ckan = CkanInstance()
-        self.geoserver_url = config['geoserver']['url']
+        self.geoserver_url = config['gs_config']['service_url']
         self.wms_version = config['geoserver']['wms']['version']
         self.wfs_version = config['geoserver']['wfs']['version']
         self.wcs_version = config['geoserver']['wcs']['version']
@@ -101,7 +100,7 @@ class OGCHelperClass:
             self.geoserver_url + 'ows?service=WCS&request=GetCapabilities&version=' + self.wcs_version,
             version=self.wcs_version)
 
-        self.external_metadata_resource = create_metadata_dict_from_xls_file(config['external_metadata_resources']['excel'])
+        self.external_metadata_resource = create_metadata_dict_from_xls_file('../ressources/metadata_template.xlsx')
 
     def create_dataset_dicts_from_wfs_or_wcs(self, service_type):
         if service_type == 'wcs':

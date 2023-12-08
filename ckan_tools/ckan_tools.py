@@ -5,7 +5,9 @@ import urllib
 import requests
 import text_unidecode
 import yaml
-from ftp_tools import FtpRekis
+from ftp_tools.ftp_tools import FtpRekis
+# from googletrans import Translator
+import os
 
 # from main import rekis_create_tempfile_from_ftp_file
 
@@ -13,7 +15,12 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 log.addHandler(logging.StreamHandler())
 
-config = yaml.safe_load(open('config.yml', encoding='UTF-8'))
+dirname = os.path.dirname(__file__)
+config_filename = os.path.join(dirname, '../config/config.yml')
+
+config = yaml.safe_load(open(config_filename, encoding='UTF-8'))
+
+# translator = Translator()
 
 
 class CkanInstance:
@@ -23,17 +30,21 @@ class CkanInstance:
         self.ckan_url = config['ckan']['url']
         self.api_action_url = self.ckan_url + '/api/action/'
         self.api_package_list = self.api_action_url + 'package_list'
+        self.api_organization_list = self.api_action_url + 'organization_list'
         self.api_package_create = self.api_action_url + 'package_create'
         self.api_package_patch = self.api_action_url + 'package_patch'
         self.api_resource_create = self.api_action_url + 'resource_create'
         self.api_resource_patch = self.api_action_url + 'resource_patch'
         self.api_resource_delete = self.api_action_url + 'resource_delete'
+        self.api_organization_delete = self.api_action_url + 'organization_delete'
         self.api_package_show = self.api_action_url + 'package_show'
+        self.api_dataset_purge = self.api_action_url + 'dataset_purge'
         self.header = {'Authorization': config['ckan']['apikey']}
         self.ftp = FtpRekis()
         self.ncdf_ckan_dataset_assignments = config['ftp_nc_ckan_assignments']
         self.ascii_ckan_dataset_assignments = config['ftp_asc_ckan_assignments']
         self.bboxes = config['bbox']
+
 
     @staticmethod
     def create_ckan_compliant_url_from_name(name):
@@ -68,6 +79,13 @@ class CkanInstance:
         else:
             return
 
+    def get_organizations_of_ckan_instance(self):
+        with urllib.request.urlopen(self.api_organization_list) as response:
+            contents = json.loads(response.read().decode('utf8'))
+            packages = contents['result']
+
+        return packages
+
     def get_packages_of_ckan_instance(self):
         with urllib.request.urlopen(self.api_package_list) as response:
             contents = json.loads(response.read().decode('utf8'))
@@ -82,10 +100,24 @@ class CkanInstance:
 
         return metadatsets
 
+    def delete_dataset(self, dataset_id):
+        data = {'id': dataset_id}
+
+        requests.post(url=self.api_dataset_purge,
+                      data=data,
+                      headers=self.header)
+
     def delete_dataset_resource(self, resource_id):
         data = {'id': resource_id}
 
         requests.post(url=self.api_resource_delete,
+                      data=data,
+                      headers=self.header)
+
+    def delete_organization(self, org_id):
+        data = {'id': org_id}
+
+        requests.post(url=self.api_organization_delete,
                       data=data,
                       headers=self.header)
 
@@ -116,8 +148,9 @@ class CkanInstance:
 
             if existing_resources_with_matching_name:
                 for item in existing_resources_with_matching_name:
-
-                    if item['cache_url'] == resource_cache_url and item['created'] == resource_create_date:
+                    # Todo: Check if useful to also check create-date
+                    # if item['cache_url'] == resource_cache_url and item['created'] == resource_create_date:
+                    if item['cache_url'] == resource_cache_url:
                         """
                         Case 1: Resource with equal name, url and create-date already exists, but file content maybe changed
                         ... do update 
@@ -140,7 +173,7 @@ class CkanInstance:
         return resource_already_exists, existing_resources_with_matching_name
 
     def push_dataset_to_ckan(self, dataset_dict):
-        log.debug("Uploading following data: \n {}".format(dataset_dict))
+        # log.debug("Uploading following data: \n {}".format(dataset_dict))
         dataset_name = dataset_dict['name']
         dataset_dict['id'] = dataset_dict['name']
         # additional_resource_paths = dataset_dict['url']
@@ -153,7 +186,7 @@ class CkanInstance:
 
         '''New Packages'''
         if dataset_name not in self.get_packages_of_ckan_instance():
-            log.debug("Inserting following new dataset: {}".format(dataset_name))
+            # log.debug("Inserting following new dataset: {}".format(dataset_name))
             # We'll use the package_create function to create a new dataset.
             # Creating a dataset requires an authorization header.
             req = urllib.request.Request(self.api_package_create, data, self.header)
@@ -182,7 +215,7 @@ class CkanInstance:
         else:
             '''Update of package'''
 
-            log.debug("Updating following dataset: {}".format(dataset_name))
+            # log.debug("Updating following dataset: {}".format(dataset_name))
 
             # Creating a dataset requires an authorization header.
             # Uses package_patch function because this will only overwrite given parameters
@@ -249,13 +282,13 @@ class CkanInstance:
 
         if dst_resource_exists:
             for item in existing_resources:
-                log.info('Updating exisiting resource with name {}'.format(item['name']))
+                log.info('Updating exisiting resource for dataset {}'.format(item['name']))
                 package_data['id'] = item['id']
                 requests.post(url=self.api_resource_patch,
                               data=package_data,
                               headers=self.header)
         else:
-            log.info('Create new resource with name {}'.format(dataset_name_url))
+            log.info('Create new resource for dataset {}'.format(dataset_name_url))
             requests.post(url=self.api_resource_create,
                           data=package_data,
                           headers=self.header)
@@ -286,14 +319,14 @@ class CkanInstance:
                 tags = self.ascii_ckan_dataset_assignments[state].replace(' ', ', ')
             elif state == 'TN':
                 state_name = 'Thüringen'
-                #dataset_theme = self.ascii_ckan_dataset_assignments[state][key.split('/')[7]]
+                # dataset_theme = self.ascii_ckan_dataset_assignments[state][key.split('/')[7]]
                 for item in self.ascii_ckan_dataset_assignments[state].keys():
                     if '/{}/'.format(item) in key:
                         dataset_theme = self.ascii_ckan_dataset_assignments[state][item]
                 tags_list = list(self.ascii_ckan_dataset_assignments[state].values())
                 tags = ', '.join(tags_list)
 
-            ckan_org = 'Rasterdaten {}'.format(state_name)
+            ckan_org = '{}'.format(state_name)
             owner_org = self.create_ckan_compliant_url_from_name(ckan_org)
             self.create_ckan_organization_if_not_exists(org_name=ckan_org)
 
@@ -301,7 +334,8 @@ class CkanInstance:
             ckan_dataset_title = 'Rasterdaten {0}: {1}'.format(state_name, dataset_theme)
             dataset_name = self.create_ckan_compliant_url_from_name(ckan_dataset_title)
 
-            description = 'Rasterdaten für das Thema {} im ASCII Format. Datenherkunft: ReKIS Expert'.format(dataset_theme)
+            description = 'Rasterdaten für das Thema {} im ASCII Format. Datenherkunft: ReKIS Expert'.format(
+                dataset_theme)
             """ Create ckan dataset if not exists"""
             if not dataset_name in packages:
                 dataset_dict = {
@@ -341,16 +375,22 @@ class CkanInstance:
         log.info("Updating NCDF climate files...")
         packages = self.get_packages_of_ckan_instance()
 
-        """ Delete resources that are not on ftp"""
-        for dataset in packages:
-            dataset_metadata = self.get_metadata_of_ckan_dataset(dataset)
+        log.debug("dict with assignments: {}".format(self.ncdf_ckan_dataset_assignments))
+
+        for key in self.ncdf_ckan_dataset_assignments:
+            """ Delete resources that are not on ftp"""
+            ckan_dataset = self.ncdf_ckan_dataset_assignments[key]
+            log.debug("Purging resources of dataset {}".format(ckan_dataset))
+            dataset_metadata = self.get_metadata_of_ckan_dataset(ckan_dataset)
             resources = dataset_metadata['resources']
             for res in resources:
-                if '.nc' in res['name'] and res['cache_url'] not in ncdf_files_dict:
-                    log.info('Resource {} not found on FTP-Server. This Resources will be deleted'.format(res['name']))
+                if ('.nc' in res['name'] or '.rar' in res['name']):
+                    log.info('Deleting resource: {}'.format(
+                        res['name']))
                     resource_id = res['id']
                     self.delete_dataset_resource(resource_id)
                 pass
+
         for key in ncdf_files_dict:
             """ 
             Check for each NCDF file if...
@@ -361,11 +401,43 @@ class CkanInstance:
                 # Check if path snippet of config is contained in path and if ckan-dataset exists
                 if path_snippet in key \
                         and self.ncdf_ckan_dataset_assignments[path_snippet] in packages:
+
                     log.info('Updating resource for following NCDF-file: {}'.format(key))
                     log.info('Corresponding CKAN-dataset: {}'.format(self.ncdf_ckan_dataset_assignments[path_snippet]))
                     ckan_dataset = self.ncdf_ckan_dataset_assignments[path_snippet]
+
                     path = key
                     create_date = ncdf_files_dict[key]['create_date']
                     self.upload_resource_from_rekisftp_to_ckan(ckan_dataset, path, create_date)
                 else:
                     pass
+    """
+    def translate_title_notes_tags(self, package_id):
+        dataset_dict = self.get_metadata_of_ckan_dataset(package_id)
+
+        title_translated = translator.translate(dataset_dict['title']).text
+        if 'notes' in dataset_dict:
+            notes_translated = translator.translate(dataset_dict['notes']).text
+            dataset_dict['notes'] = notes_translated
+
+        if 'tags' in dataset_dict:
+            tags_list = dataset_dict['tags']
+            if tags_list:
+                for t in tags_list:
+                    t['name'] = translator.translate(t['name']).text
+                    t['display_name'] = translator.translate(t['display_name']).text
+                    dataset_dict['tags'] = tags_list
+
+        dataset_dict['title'] = title_translated
+
+        self.push_dataset_to_ckan(dataset_dict=dataset_dict)
+
+        return dataset_dict
+
+    def translate_all_packages(self):
+        packages = self.get_packages_of_ckan_instance()
+
+        for p in packages:
+            log.info(f'Translating following Package: {p}')
+            self.translate_title_notes_tags(p)
+    """

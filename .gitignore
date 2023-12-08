@@ -1,6 +1,8 @@
-config.yml
+config/config.yml
 main.py
 test_upload_ftp_resources_to_ckan.py
 testing.py
-ckan_and_ftp_data.py
+ckan_tools/ckan_and_ftp_data.py
 klima_data_ftp.py
+st_asc_dict.py
+ftp_tools/ftp_testing.py

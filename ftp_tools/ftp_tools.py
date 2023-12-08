@@ -2,11 +2,15 @@ import ftplib
 import logging
 import tempfile
 from io import BytesIO
+import os
 
 import yaml
 from ftp_walk import FTPWalk
 
-config = yaml.safe_load(open('config.yml'))
+dirname = os.path.dirname(__file__)
+config_filename = os.path.join(dirname, '../config/config.yml')
+
+config = yaml.safe_load(open(config_filename))
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -59,7 +63,7 @@ class FtpRekis:
         """Checks for each key in ftp_file_dict whether there is a matching dataset in ckan"""
         ncdf_files = {}
         for key in dict:
-            if '.nc' in key:
+            if '.nc' or '.rar' in key:
                 #ncdf_files[key] = dict[key]
                 #  FTP paths are changed to
                 #  https://rekisviewer.hydro.tu-dresden.de/geoserver/klima/taegliche_daten/SA/Niederschlag.nc
